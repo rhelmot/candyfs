@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 
 #include "storage_emulator.h"
 
@@ -8,4 +9,16 @@ fakedisk_t *create_disk(int nblocks, int blocksize) {
     disk->nblocks = nblocks;
     disk->blocksize = blocksize;
     return disk;
+}
+
+void destroy_disk(fakedisk_t *disk) {
+    free(disk);
+}
+
+void write_block(fakedisk_t *disk, int blockno, block_t block) {
+    if (blockno < 0 || blockno >= disk->nblocks) {
+        return;
+    }
+
+    memcpy(&disk->data[blockno * disk->blocksize], block, disk->blocksize);
 }
