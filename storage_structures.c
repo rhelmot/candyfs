@@ -1,29 +1,165 @@
+#include <assert.h>
+#include <limits.h>
+
 #include "storage_emulator.h"
 
 #define BLOCKSIZE 512
+#define CANDYFS_MAGIC 0xCA4D11F5
 
-typedef struct superblock {
-    int magic;
-    int ilist_size;
-} superblock_t;
+#define INO_EOF INT_MIN
+#define BLOCKNO_EOF 0
 
 typedef int ino_t;
 typedef int blockno_t;
 
-#define INUMS_PER_ILIST_BLOCK (BLOCKSIZE / sizeof(blockno_t))
+typedef struct superblock {
+    int magic;
+    int ilist_size;
+    blockno_t freelist_start;
+    ino_t ino_freelist_start;
+    char _pad[BLOCKSIZE-16];
+} superblock_t;
+
+#define BLOCKNUMS_PER_FREELIST_BLOCK ((int)(BLOCKSIZE / sizeof(blockno_t) - 1))
+typedef struct freelist_block {
+    blockno_t next;
+    blockno_t blocks[BLOCKNUMS_PER_FREELIST_BLOCK];
+} freelist_block_t;
+
+#define INUMS_PER_ILIST_BLOCK ((int)(BLOCKSIZE / sizeof(blockno_t)))
 typedef blockno_t ilist_block_t[INUMS_PER_ILIST_BLOCK];
 
-int x() {
+typedef char data_block_t[BLOCKSIZE];
+
+_Static_assert(sizeof(superblock_t) == BLOCKSIZE, "superblock is not blocksize");
+_Static_assert(sizeof(freelist_block_t) == BLOCKSIZE, "freelist block is not blocksize");
+_Static_assert(sizeof(ilist_block_t) == BLOCKSIZE, "ilist block is not blocksize");
+_Static_assert(sizeof(data_block_t) == BLOCKSIZE, "data block is not blocksize");
+
+blockno_t inumber_to_blocknumber(fakedisk_t *disk, ino_t inumber) {
     ilist_block_t myblock;
-    assert(sizeof(myblock) == BLOCKSIZE);
-
-    blockno_t my_block_num = myblock[0];
-    myblock[INUMS_PER_ILIST_BLOCK - 1];
-
+    read_block(disk, 1 + inumber / INUMS_PER_ILIST_BLOCK, myblock);
+    return myblock[inumber % INUMS_PER_ILIST_BLOCK];
 }
 
-int inumber_to_blocknumber(fakedisk_t *disk, int inumber) {
+void inumber_set_blocknumber(fakedisk_t *disk, ino_t inumber, blockno_t blocknumber) {
     ilist_block_t myblock;
-    read_block(disk, 1 + inumber / INUMS_PER_ILIST_BLOCK, (block_t)myblock);
-    return myblock[inumber % INUMS_PER_ILIST_BLOCK];
+    read_block(disk, 1 + inumber / INUMS_PER_ILIST_BLOCK, myblock);
+    myblock[inumber % INUMS_PER_ILIST_BLOCK] = blocknumber;
+    write_block(disk, 1 + inumber / INUMS_PER_ILIST_BLOCK, myblock);
+}
+
+ino_t allocate_inumber(fakedisk_t *disk) {
+    superblock_t superblock;
+    read_block(disk, 0, &superblock);
+    ino_t result = superblock.ino_freelist_start;
+    if (result != INO_EOF) {
+        superblock.ino_freelist_start = -inumber_to_blocknumber(disk, result);
+        write_block(disk, 0, &superblock);
+    }
+    return result;
+}
+
+void free_inumber(fakedisk_t *disk, ino_t inumber) {
+    superblock_t superblock;
+    read_block(disk, 0, &superblock);
+    inumber_set_blocknumber(disk, inumber, -superblock.ino_freelist_start);
+    superblock.ino_freelist_start = inumber;
+    write_block(disk, 0, &superblock);
+}
+
+blockno_t allocate_block(fakedisk_t *disk) {
+    superblock_t superblock;
+    read_block(disk, 0, &superblock);
+    if (superblock.freelist_start == BLOCKNO_EOF) {
+        return BLOCKNO_EOF;
+    }
+
+    freelist_block_t freelist_block;
+    read_block(disk, superblock.freelist_start, &freelist_block);
+    for (int i = 0; i < BLOCKNUMS_PER_FREELIST_BLOCK; i++) {
+        blockno_t candidate = freelist_block.blocks[i];
+        if (candidate != BLOCKNO_EOF) {
+            freelist_block.blocks[i] = BLOCKNO_EOF;
+            write_block(disk, superblock.freelist_start, &freelist_block);
+            return candidate;
+        }
+    }
+
+    blockno_t vagabond = superblock.freelist_start;
+    superblock.freelist_start = freelist_block.next;
+    write_block(disk, 0, &superblock);
+    return vagabond;
+}
+
+void free_block(fakedisk_t *disk, blockno_t blockno) {
+    superblock_t superblock;
+    read_block(disk, 0, &superblock);
+
+    if (superblock.freelist_start != BLOCKNO_EOF) {
+        freelist_block_t freelist_head;
+        read_block(disk, superblock.freelist_start, &freelist_head);
+        for (int i = BLOCKNUMS_PER_FREELIST_BLOCK - 1; i >= 0; i--) {
+            if (freelist_head.blocks[i] == BLOCKNO_EOF) {
+                freelist_head.blocks[i] = blockno;
+                write_block(disk, superblock.freelist_start, &freelist_head);
+                return;
+            }
+        }
+    }
+
+    freelist_block_t vagabond_block;
+    vagabond_block.next = superblock.freelist_start;
+    for (int i = 0; i < BLOCKNUMS_PER_FREELIST_BLOCK; i++) {
+        vagabond_block.blocks[i] = BLOCKNO_EOF;
+    }
+    superblock.freelist_start = blockno;
+    write_block(disk, 0, &superblock);
+    write_block(disk, blockno, &vagabond_block);
+}
+
+// ilist size is number of ilist blocks
+void mkfs(fakedisk_t *disk, int ilist_size) {
+    int num_data_blocks = disk->nblocks - ilist_size - 1;
+    blockno_t first_data_block = ilist_size + 1;
+    assert(num_data_blocks > 0);
+
+    superblock_t superblock;
+    superblock.magic = CANDYFS_MAGIC;
+    superblock.ilist_size = ilist_size;
+    superblock.freelist_start = first_data_block;
+    superblock.ino_freelist_start = 0;
+    write_block(disk, 0, &superblock);
+
+    for (int i = 0; i < ilist_size; i++) {
+        ilist_block_t iblock;
+        for (int j = 0; j < INUMS_PER_ILIST_BLOCK; j++) {
+            iblock[j] = -(j + INUMS_PER_ILIST_BLOCK*i + 1);
+        }
+        if (i == ilist_size - 1) {
+            iblock[INUMS_PER_ILIST_BLOCK - 1] = INO_EOF;
+        }
+        write_block(disk, i + 1, iblock);
+    }
+
+    for (blockno_t i = first_data_block; i < disk->nblocks; i += BLOCKNUMS_PER_FREELIST_BLOCK + 1) {
+        freelist_block_t freelist_entry;
+        freelist_entry.next = i + BLOCKNUMS_PER_FREELIST_BLOCK + 1;
+        if (freelist_entry.next >= disk->nblocks) {
+            freelist_entry.next = BLOCKNO_EOF;
+        }
+        for (int j = 0; j < BLOCKNUMS_PER_FREELIST_BLOCK; j++) {
+            blockno_t target_block = i + 1 + j;
+            if (target_block >= disk->nblocks) {
+                target_block = BLOCKNO_EOF;
+            }
+            freelist_entry.blocks[j] = target_block;
+        }
+
+        write_block(disk, i, &freelist_entry);
+    }
+}
+
+int main() {
+    return 1;
 }
