@@ -160,6 +160,3 @@ void mkfs(fakedisk_t *disk, int ilist_size) {
     }
 }
 
-int main() {
-    return 1;
-}
