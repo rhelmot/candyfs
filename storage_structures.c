@@ -1,23 +1,16 @@
-#include <assert.h>
-#include <limits.h>
+#include "storage_structures.h"
 
-#include "storage_emulator.h"
+#define INODE_MAGIC 0xCA4140DE
 
-#define BLOCKSIZE 512
-#define CANDYFS_MAGIC 0xCA4D11F5
-
-#define INO_EOF INT_MIN
-#define BLOCKNO_EOF 0
-
-typedef int ino_t;
-typedef int blockno_t;
+#define SUPERBLOCK_HEAD \
+    int magic;                  \
+    int ilist_size;             \
+    blockno_t freelist_start;   \
+    ino_t ino_freelist_start;
 
 typedef struct superblock {
-    int magic;
-    int ilist_size;
-    blockno_t freelist_start;
-    ino_t ino_freelist_start;
-    char _pad[BLOCKSIZE-16];
+    SUPERBLOCK_HEAD
+    char _pad[BLOCKSIZE - sizeof(struct { SUPERBLOCK_HEAD })];
 } superblock_t;
 
 #define BLOCKNUMS_PER_FREELIST_BLOCK ((int)(BLOCKSIZE / sizeof(blockno_t) - 1))
@@ -28,8 +21,6 @@ typedef struct freelist_block {
 
 #define INUMS_PER_ILIST_BLOCK ((int)(BLOCKSIZE / sizeof(blockno_t)))
 typedef blockno_t ilist_block_t[INUMS_PER_ILIST_BLOCK];
-
-typedef char data_block_t[BLOCKSIZE];
 
 _Static_assert(sizeof(superblock_t) == BLOCKSIZE, "superblock is not blocksize");
 _Static_assert(sizeof(freelist_block_t) == BLOCKSIZE, "freelist block is not blocksize");
@@ -119,7 +110,7 @@ void free_block(fakedisk_t *disk, blockno_t blockno) {
 }
 
 // ilist size is number of ilist blocks
-void mkfs(fakedisk_t *disk, int ilist_size) {
+void mkfs_storage(fakedisk_t *disk, int ilist_size) {
     int num_data_blocks = disk->nblocks - ilist_size - 1;
     blockno_t first_data_block = ilist_size + 1;
     assert(num_data_blocks > 0);
@@ -137,7 +128,7 @@ void mkfs(fakedisk_t *disk, int ilist_size) {
             iblock[j] = -(j + INUMS_PER_ILIST_BLOCK*i + 1);
         }
         if (i == ilist_size - 1) {
-            iblock[INUMS_PER_ILIST_BLOCK - 1] = INO_EOF;
+            iblock[INUMS_PER_ILIST_BLOCK - 1] = BLOCKNO_EOF;
         }
         write_block(disk, i + 1, iblock);
     }

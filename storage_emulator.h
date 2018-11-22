@@ -1,6 +1,6 @@
 typedef struct fakedisk {
-    int nblocks;
-    int blocksize;
+    unsigned int nblocks;
+    unsigned int blocksize;
     char data[0];
 } fakedisk_t;
 
