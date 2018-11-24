@@ -1,0 +1,4 @@
+for thread safety:
+
+- need to lock each individual inumber on the level of the exported functions in inodes.c
+- need to lock the data and inumber freelists in storage_structures.c

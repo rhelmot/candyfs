@@ -1,7 +1,5 @@
 #include "storage_structures.h"
 
-#define INODE_MAGIC 0xCA4140DE
-
 #define SUPERBLOCK_HEAD \
     int magic;                  \
     int ilist_size;             \

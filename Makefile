@@ -1,9 +1,16 @@
-COMPILER = gcc
-FILESYSTEM_FILES = candyfs.c storage_emulator.c storage_structures.c
+COMMON_OBJECTS = storage_emulator.o storage_structures.o inodes.o
 
-build: $(FILESYSTEM_FILES)
-	$(COMPILER) $(FILESYSTEM_FILES) -o candyfs `pkg-config fuse --cflags --libs`
+CFLAGS=`pkg-config fuse --cflags` -g -O0
+LDFLAGS=`pkg-config fuse --libs`
 
+%.o: %.c
+	$(CC) -c $< $(CFLAGS) -o $@
+
+candyfs: $(COMMON_OBJECTS) candyfs.o
+	$(CC) $^ -o $@ $(LDFLAGS)
+
+test: $(COMMON_OBJECTS) test.o
+	$(CC) $^ -o $@ $(LDFLAGS)
 
 clean:
-	rm candyfs
+	rm -f candyfs test *.o
