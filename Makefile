@@ -1,4 +1,4 @@
-COMMON_OBJECTS = storage_emulator.o storage_structures.o inodes.o
+COMMON_OBJECTS = storage_emulator.o storage_structures.o inodes.o directories.o tree.o
 
 CFLAGS=`pkg-config fuse --cflags` -g -O0
 LDFLAGS=`pkg-config fuse --libs`
