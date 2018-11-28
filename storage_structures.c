@@ -3,13 +3,17 @@
 
 /*SUPERBLOCK fields
 *size of filesystem
+*
 *number of freeblocks int he file system
 *list of free blocks available
 *index of next free block in the list of free blocks
+*
 *size of inode list
+*
 *number of free inodes in the FS
 *a list of free inodes in the FS
 *index of the next free inode in the list of free inodes
+*
 *lock fields for the 
 *flag to indicate the SUPERBLOCK has been modified
 */
