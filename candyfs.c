@@ -8,7 +8,7 @@
  * License: Fire in the hole :)
  */
 
-#define FUSE_USE_VERSION 30
+#define FUSE_USE_VERSION 29
 
 #include <fuse.h>
 #include <stdio.h>
