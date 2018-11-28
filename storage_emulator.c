@@ -28,4 +28,8 @@ void write_block(fakedisk_t *disk, int blockno, void* block) {
     }
 
     memcpy(&disk->data[blockno * disk->blocksize], block, disk->blocksize);
+    /*write block  in the byteoffset determined by 
+    the blocknumber intended to be written and the 
+    size of the block inside the fake disk's data 
+    section*/
 }
