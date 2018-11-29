@@ -18,6 +18,11 @@
 #define ENTRIES_PER_DIR_BLOCK (BLOCKSIZE / 4 / sizeof(ino_t))
 #define NAMESPACE_PER_DIR_BLOCK (BLOCKSIZE / 4 * 3)
 
+// directory storage scheme: each block contains numbers that correspond to names.
+// the names are stored in a string table where the nth string (null separated)
+// corresponds to the nth index in the numbers array.
+// this can fill up either by exhausting the numbers array or the name characters.
+// there is no particular ordering to the entries but each block must be compacted.
 typedef struct dir_map_block {
 	ino_t numbers[ENTRIES_PER_DIR_BLOCK];
 	char names[NAMESPACE_PER_DIR_BLOCK];
@@ -251,4 +256,58 @@ ino_t dir_remove(fakedisk_t *disk, ino_t directory, const char *name, size_t nam
 	}
 
 	return -1;
+}
+
+// enumerate the contents of a directory. stores the inumber and name of the next entry
+// into the appropriate outparams. returns an offset that should be passed into the offset
+// parameter next call in order to retrieve the next entry.
+off_t dir_enumerate(fakedisk_t *disk, ino_t directory, off_t offset, ino_t *ino_out, char *name_out, size_t namesize) {
+	inode_info_t info;
+	dir_map_block_t block;
+	off_t pos = (offset / ENTRIES_PER_DIR_BLOCK) * sizeof(block);
+	size_t idx = offset % ENTRIES_PER_DIR_BLOCK;
+
+	if (inode_get_info(disk, directory, &info) < 0) {
+		return -1;
+	}
+
+	if (!S_ISDIR(info.mode)) {
+		return -1;
+	}
+
+	if (namesize > 255) {
+		return -1;
+	}
+
+	// increment our search until we find a block containing an entry not yet covered
+	while (1) {
+		if (inode_read(disk, directory, pos, &block, sizeof(block)) != sizeof(block)) {
+			return 0;
+		}
+
+		// have we found a non-empty entry in this block?
+		if (block.numbers[idx] != INO_EOF) {
+			break;
+		}
+
+		// if not, try again at the start of the next block
+		pos += sizeof(block);
+		idx = 0;
+	}
+
+
+	size_t nameoff = 0;
+	for (unsigned int i = 0; i < idx; i++) {
+		nameoff += strlen(&block.names[nameoff]) + 1;
+	}
+	size_t real_namesize = strlen(&block.names[nameoff]);
+	if (real_namesize > namesize - 1) {
+		real_namesize = namesize - 1;
+	}
+
+	memcpy(name_out, &block.names[nameoff], real_namesize);
+	name_out[real_namesize] = 0;
+	*ino_out = block.numbers[idx];
+
+	return idx + (pos / sizeof(block) * ENTRIES_PER_DIR_BLOCK) + 1;
 }
