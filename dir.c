@@ -1,4 +1,4 @@
-#include "inodes.h"
+#include "dir.h"
 
 #include <string.h>
 
@@ -33,7 +33,7 @@ _Static_assert(ENTRIES_PER_DIR_BLOCK >= 2, "not enough dir entries per dir block
 _Static_assert(NAMESPACE_PER_DIR_BLOCK > 255, "not enough name space per block");
 
 // allocate a new directory, return its inumber
-ino_t dir_allocate(fakedisk_t *disk, ino_t parent, uid_t owner, gid_t group) {
+ino_t dir_allocate(disk_t *disk, ino_t parent, uid_t owner, gid_t group) {
 	ino_t directory = inode_allocate(disk);
 	if (directory < 0) {
 		return -1;
@@ -62,7 +62,7 @@ ino_t dir_allocate(fakedisk_t *disk, ino_t parent, uid_t owner, gid_t group) {
 }
 
 // free the directory, failing if it contains anything
-int dir_free(fakedisk_t *disk, ino_t directory) {
+int dir_free(disk_t *disk, ino_t directory) {
 	inode_info_t info;
 	dir_map_block_t block;
 	if (inode_get_info(disk, directory, &info) < 0) {
@@ -87,7 +87,7 @@ int dir_free(fakedisk_t *disk, ino_t directory) {
 }
 
 // change the parent inode entry
-int dir_reparent(fakedisk_t *disk, ino_t directory, ino_t new_parent) {
+int dir_reparent(disk_t *disk, ino_t directory, ino_t new_parent) {
 	inode_info_t info;
 	dir_map_block_t block;
 	if (inode_get_info(disk, directory, &info) < 0) {
@@ -105,7 +105,7 @@ int dir_reparent(fakedisk_t *disk, ino_t directory, ino_t new_parent) {
 }
 
 // look up a dir entry, returning the target inode
-ino_t dir_lookup(fakedisk_t *disk, ino_t directory, const char *name, size_t namesize) {
+ino_t dir_lookup(disk_t *disk, ino_t directory, const char *name, size_t namesize) {
 	inode_info_t info;
 	dir_map_block_t block;
 	if (inode_get_info(disk, directory, &info) < 0) {
@@ -136,7 +136,7 @@ ino_t dir_lookup(fakedisk_t *disk, ino_t directory, const char *name, size_t nam
 }
 
 // add a directory entry
-int dir_insert(fakedisk_t *disk, ino_t directory, const char *name, size_t namesize, ino_t target) {
+int dir_insert(disk_t *disk, ino_t directory, const char *name, size_t namesize, ino_t target) {
 	inode_info_t info;
 	dir_map_block_t block;
 	dir_map_block_t bestblock;
@@ -198,7 +198,7 @@ int dir_insert(fakedisk_t *disk, ino_t directory, const char *name, size_t names
 }
 
 // remove a directory entry
-ino_t dir_remove(fakedisk_t *disk, ino_t directory, const char *name, size_t namesize) {
+ino_t dir_remove(disk_t *disk, ino_t directory, const char *name, size_t namesize) {
 	inode_info_t info;
 	dir_map_block_t block;
 	off_t pos = 0;
@@ -261,7 +261,7 @@ ino_t dir_remove(fakedisk_t *disk, ino_t directory, const char *name, size_t nam
 // enumerate the contents of a directory. stores the inumber and name of the next entry
 // into the appropriate outparams. returns an offset that should be passed into the offset
 // parameter next call in order to retrieve the next entry.
-off_t dir_enumerate(fakedisk_t *disk, ino_t directory, off_t offset, ino_t *ino_out, char *name_out, size_t namesize) {
+off_t dir_enumerate(disk_t *disk, ino_t directory, off_t offset, ino_t *ino_out, char *name_out, size_t namesize) {
 	inode_info_t info;
 	dir_map_block_t block;
 	off_t pos = (offset / ENTRIES_PER_DIR_BLOCK) * sizeof(block);

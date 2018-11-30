@@ -1,4 +1,4 @@
-#include "inodes.h"
+#include "refs.h"
 
 #include <stddef.h>
 #include <stdlib.h>
@@ -32,7 +32,7 @@ open_file_node_t *find_node(ino_t inode) {
     return *target;
 }
 
-int refs_open(fakedisk_t *disk, ino_t inode) {
+int refs_open(disk_t *disk, ino_t inode) {
     open_file_node_t **target = find_node_loc(inode);
 
     if (*target && (*target)->inode == inode) {
@@ -53,7 +53,7 @@ int refs_open(fakedisk_t *disk, ino_t inode) {
     return 0;
 }
 
-int refs_close(fakedisk_t *disk, ino_t inode) {
+int refs_close(disk_t *disk, ino_t inode) {
     open_file_node_t **target = find_node_loc(inode);
 
     if (!*target || (*target)->inode != inode) {
@@ -76,7 +76,7 @@ int refs_close(fakedisk_t *disk, ino_t inode) {
     return 0;
 }
 
-nlink_t refs_link(fakedisk_t *disk, ino_t inode) {
+nlink_t refs_link(disk_t *disk, ino_t inode) {
     open_file_node_t *node = find_node(inode);
     if (!node) {
 	return -1;
@@ -85,7 +85,7 @@ nlink_t refs_link(fakedisk_t *disk, ino_t inode) {
     return node->nlinks;
 }
 
-nlink_t refs_unlink(fakedisk_t *disk, ino_t inode) {
+nlink_t refs_unlink(disk_t *disk, ino_t inode) {
     open_file_node_t *node = find_node(inode);
     if (!node) {
 	return -1;

@@ -1,9 +1,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "storage_emulator.h"
+#include "disk.h"
 
-fakedisk_t *create_disk(int nblocks, int blocksize) {
+disk_t *disk_create(int nblocks, int blocksize) {
     int fullsize = nblocks*blocksize;
     struct fakedisk *disk = malloc(sizeof(struct fakedisk) + fullsize);
     disk->nblocks = nblocks;
@@ -11,18 +11,18 @@ fakedisk_t *create_disk(int nblocks, int blocksize) {
     return disk;
 }
 
-void read_block(fakedisk_t *disk, int blockno, void* block){
+void disk_read(disk_t *disk, int blockno, void* block){
     if(blockno < 0 || blockno >= disk->nblocks){
         return;
     }
     memcpy(block, &disk->data[blockno*disk->blocksize], disk->blocksize);
 }
 
-void destroy_disk(fakedisk_t *disk) {
+void disk_destroy(disk_t *disk) {
     free(disk);
 }
 
-void write_block(fakedisk_t *disk, int blockno, void* block) {
+void disk_write(disk_t *disk, int blockno, void* block) {
     if (blockno < 0 || blockno >= disk->nblocks) {
         return;
     }

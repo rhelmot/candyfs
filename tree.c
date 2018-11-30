@@ -1,4 +1,4 @@
-#include "directories.h"
+#include "dir.h"
 
 #include <string.h>
 
@@ -8,7 +8,7 @@
 // if I'm wrong about that, just add a check next to the isdir and add a recursion counter
 // curdir should be the inumber of the current working directory
 // rootdir should be the inumber of the root directory (0, except for cases of chroot. does fuse handle that for us?)
-ino_t namei(fakedisk_t *disk, const char* path, ino_t curdir, ino_t rootdir) {
+ino_t namei(disk_t *disk, const char* path, ino_t curdir, ino_t rootdir) {
     const char *token = path;
     ino_t current = curdir;
 
@@ -42,7 +42,7 @@ ino_t namei(fakedisk_t *disk, const char* path, ino_t curdir, ino_t rootdir) {
     return current;
 }
 
-int mkfs_tree(fakedisk_t *disk) {
+int mkfs_tree(disk_t *disk) {
     assert(dir_allocate(disk, 0, 0, 0) == 0);
     return 0;
 }

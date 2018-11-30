@@ -20,7 +20,7 @@
 #include <stdlib.h>
 #include <errno.h>
 
-#include "storage_emulator.h"
+#include "disk.h"
 
 
 

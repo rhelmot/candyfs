@@ -1,10 +1,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include "inodes.h"
+#include "inode.h"
 
 int main() {
-    fakedisk_t *disk = create_disk(1024 * 1024, BLOCKSIZE);
+    disk_t *disk = disk_create(1024 * 1024, BLOCKSIZE);
     mkfs_storage(disk, 50);
 
     ino_t inum = inode_allocate(disk);
