@@ -40,7 +40,7 @@ ino_t dir_allocate(fakedisk_t *disk, ino_t parent, uid_t owner, gid_t group) {
 	}
 
 	// TODO: umask
-	assert(inode_set_info(disk, directory, S_IFDIR | 0755, owner, group, 1) >= 0);
+	assert(inode_set_info(disk, directory, S_IFDIR | 0755, owner, group) >= 0);
 
 	dir_map_block_t block;
 	block.numbers[0] = parent;

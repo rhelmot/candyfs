@@ -482,7 +482,7 @@ off_t inode_setsize(fakedisk_t *disk, ino_t inumber, off_t size) {
 	return inode.size;
 }
 
-// EXPORTED: allocate an inode. has one link by default.
+// EXPORTED: allocate an inode. has zero links by default.
 ino_t inode_allocate(fakedisk_t *disk) {
 	// set basic metadata
 	inode_t inode;
@@ -528,9 +528,10 @@ int inode_free(fakedisk_t *disk, ino_t inumber) {
 	inode_t inode;
 	read_block(disk, block, &inode);
 	if (inode.magic != INODE_MAGIC) {
-		return -1;
+		return -1; // CRITICAL ERROR
 	}
 
+	// is this appropriate? probably an okay sanity check...
 	if (inode.nlinks != 0) {
 		return -1;
 	}
@@ -542,7 +543,7 @@ int inode_free(fakedisk_t *disk, ino_t inumber) {
 }
 
 // EXPORTED: set the metadata fields on the inode that aren't connected to anything else
-int inode_set_info(fakedisk_t *disk, ino_t inumber, mode_t mode, uid_t owner, gid_t group, nlink_t nlinks) {
+int inode_set_info(fakedisk_t *disk, ino_t inumber, mode_t mode, uid_t owner, gid_t group) {
 	blockno_t block = inumber_to_blocknumber(disk, inumber);
 	if (block < 0) {
 		return -1;
@@ -556,7 +557,6 @@ int inode_set_info(fakedisk_t *disk, ino_t inumber, mode_t mode, uid_t owner, gi
 	inode.mode = mode;
 	inode.owner = owner;
 	inode.group = group;
-	inode.nlinks = nlinks;
 	now(&inode.last_statchange);
 	write_block(disk, block, &inode);
 	return 0;
@@ -576,6 +576,42 @@ int inode_get_info(fakedisk_t *disk, ino_t inumber, inode_info_t *info) {
 
 	memcpy(info, &inode, sizeof(inode_info_t));
 	return 0;
+}
+
+// EXPORTED: atomically increment the link count
+nlink_t inode_link(fakedisk_t *disk, ino_t inumber) {
+	blockno_t block = inumber_to_blocknumber(disk, inumber);
+	if (block < 0) {
+		return -1;
+	}
+	inode_t inode;
+	read_block(disk, block, &inode);
+	if (inode.magic != INODE_MAGIC) {
+		return -1;
+	}
+
+	inode.nlinks++;
+	now(&inode.last_statchange);
+	write_block(disk, block, &inode);
+	return inode.nlinks;
+}
+
+// EXPORTED: atomically decrement the link count. does not handle freeing at 0 links
+nlink_t inode_unlink(fakedisk_t *disk, ino_t inumber) {
+	blockno_t block = inumber_to_blocknumber(disk, inumber);
+	if (block < 0) {
+		return -1;
+	}
+	inode_t inode;
+	read_block(disk, block, &inode);
+	if (inode.magic != INODE_MAGIC) {
+		return -1;
+	}
+
+	inode.nlinks--;
+	now(&inode.last_statchange);
+	write_block(disk, block, &inode);
+	return inode.nlinks;
 }
 
 // EXPORTED: write to a file

@@ -4,3 +4,4 @@ for thread safety:
 - need to lock the data and inumber freelists in storage_structures.c
 - need to lock dir write operations
 - need namei and friends to pass around open-file handles to stuff so they don't get deleted out from under the reference
+- need to lock all operations on the open file table
