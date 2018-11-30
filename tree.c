@@ -43,6 +43,6 @@ ino_t namei(disk_t *disk, const char* path, ino_t curdir, ino_t rootdir) {
 }
 
 int mkfs_tree(disk_t *disk) {
-    assert(dir_allocate(disk, 0, 0, 0) == 0);
+    assert(dir_create(disk, 0, 0, 0) == 0);
     return 0;
 }

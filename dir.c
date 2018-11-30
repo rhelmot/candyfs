@@ -33,7 +33,7 @@ _Static_assert(ENTRIES_PER_DIR_BLOCK >= 2, "not enough dir entries per dir block
 _Static_assert(NAMESPACE_PER_DIR_BLOCK > 255, "not enough name space per block");
 
 // allocate a new directory, return its inumber
-ino_t dir_allocate(disk_t *disk, ino_t parent, uid_t owner, gid_t group) {
+ino_t dir_create(disk_t *disk, ino_t parent, uid_t owner, gid_t group) {
 	ino_t directory = inode_allocate(disk);
 	if (directory < 0) {
 		return -1;

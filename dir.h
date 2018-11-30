@@ -1,6 +1,6 @@
 #include "inode.h"
 
-ino_t dir_allocate(disk_t *disk, ino_t parent, uid_t owner, gid_t group);
+ino_t dir_create(disk_t *disk, ino_t parent, uid_t owner, gid_t group);
 int dir_reparent(disk_t *disk, ino_t directory, ino_t new_parent);
 int dir_free(disk_t *disk, ino_t directory);
 
