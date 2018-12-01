@@ -2,6 +2,7 @@
 
 #include <string.h>
 
+// create a symlink, returning the new inode
 ino_t symlink_create(disk_t *disk, const char* filename) {
     size_t namesize = strlen(filename);
     if (namesize == 0 || namesize > PATH_MAX - 1) {
@@ -23,6 +24,7 @@ ino_t symlink_create(disk_t *disk, const char* filename) {
     return symlink;
 }
 
+// basically readlink(2)
 ino_t symlink_read(disk_t *disk, ino_t symlink, char *filename, size_t maxsize) {
     inode_info_t info;
     if (inode_getinfo(disk, symlink, &info) < 0) {

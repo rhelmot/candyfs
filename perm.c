@@ -1,8 +1,9 @@
 #include "perm.h"
 
+// check if the given credentials have the rights to a given kind of editing on a given inode
 int perm_check(disk_t *disk, ino_t inode, int perms, uid_t user, gid_t group) {
     inode_info_t info;
-    if (inode_getinfo(disk, inode, &info) <= 0) {
+    if (inode_getinfo(disk, inode, &info) < 0) {
         return -1;
     }
 
@@ -19,9 +20,10 @@ int perm_check(disk_t *disk, ino_t inode, int perms, uid_t user, gid_t group) {
     return (perms & info.mode & 7) == perms;
 }
 
+// do the chmod, checking ownership and for legal modes
 int perm_chmod(disk_t *disk, ino_t inode, mode_t mode, uid_t user) {
     inode_info_t info;
-    if (inode_getinfo(disk, inode, &info) <= 0) {
+    if (inode_getinfo(disk, inode, &info) < 0) {
         return -1;
     }
 
@@ -36,6 +38,7 @@ int perm_chmod(disk_t *disk, ino_t inode, mode_t mode, uid_t user) {
     return inode_chmod(disk, inode, mode);
 }
 
+// do the chown, checking for root
 int perm_chown(disk_t *disk, ino_t inode, uid_t user, uid_t newuser, uid_t newgroup) {
     if (user != 0) {
         return -1;

@@ -6,7 +6,7 @@ ino_t file_create(disk_t *disk) {
         return -1;
     }
 
-    assert(inode_chmod(disk, symlink, S_IFREG | 0777) >= 0);
+    assert(inode_chmod(disk, file, S_IFREG | 0777) >= 0);
     return file;
 }
 
