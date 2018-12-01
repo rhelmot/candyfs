@@ -482,12 +482,12 @@ off_t inode_setsize(disk_t *disk, ino_t inumber, off_t size) {
 	return inode.size;
 }
 
-// EXPORTED: allocate an inode. has zero links by default.
+// EXPORTED: allocate an inode. zero links, full permissions, and owned by root by default.
 ino_t inode_allocate(disk_t *disk) {
 	// set basic metadata
 	inode_t inode;
 	inode.magic = INODE_MAGIC;
-	inode.mode = 0;
+	inode.mode = 0777;
 	inode.nlinks = 0;
 	inode.owner = 0;
 	inode.group = 0;
@@ -542,8 +542,8 @@ int inode_free(disk_t *disk, ino_t inumber) {
 	return 0;
 }
 
-// EXPORTED: set the metadata fields on the inode that aren't connected to anything else
-int inode_set_info(disk_t *disk, ino_t inumber, mode_t mode, uid_t owner, gid_t group) {
+// EXPORTED: set the mode field atomicly
+int inode_chmod(disk_t *disk, ino_t inumber, mode_t mode) {
 	blockno_t block = ino_get(disk, inumber);
 	if (block < 0) {
 		return -1;
@@ -555,15 +555,36 @@ int inode_set_info(disk_t *disk, ino_t inumber, mode_t mode, uid_t owner, gid_t 
 	}
 
 	inode.mode = mode;
-	inode.owner = owner;
-	inode.group = group;
+	now(&inode.last_statchange);
+	disk_write(disk, block, &inode);
+	return 0;
+}
+
+// EXPORTED: set the uid/gid fields atomicly
+int inode_chown(disk_t *disk, ino_t inumber, uid_t owner, gid_t group) {
+	blockno_t block = ino_get(disk, inumber);
+	if (block < 0) {
+		return -1;
+	}
+	inode_t inode;
+	disk_read(disk, block, &inode);
+	if (inode.magic != INODE_MAGIC) {
+		return -1;
+	}
+
+	if (owner != (unsigned int)~0) {
+		inode.owner = owner;
+	}
+	if (group != (unsigned int)~0) {
+		inode.group = group;
+	}
 	now(&inode.last_statchange);
 	disk_write(disk, block, &inode);
 	return 0;
 }
 
 // EXPORTED: get the inode metadata
-int inode_get_info(disk_t *disk, ino_t inumber, inode_info_t *info) {
+int inode_getinfo(disk_t *disk, ino_t inumber, inode_info_t *info) {
 	blockno_t block = ino_get(disk, inumber);
 	if (block < 0) {
 		return -1;
@@ -615,7 +636,7 @@ nlink_t inode_unlink(disk_t *disk, ino_t inumber) {
 }
 
 // EXPORTED: write to a file
-ssize_t inode_write(disk_t *disk, ino_t inumber, off_t pos, void *data, ssize_t size) {
+ssize_t inode_write(disk_t *disk, ino_t inumber, off_t pos, const void *data, ssize_t size) {
 	blockno_t block = ino_get(disk, inumber);
 	if (block < 0) {
 		return -1;
@@ -682,7 +703,7 @@ ssize_t inode_write(disk_t *disk, ino_t inumber, off_t pos, void *data, ssize_t 
 			indirection,
 			curpos < zero_endpos ? pos         : zero_endpos,
 			curpos < zero_endpos ? zero_endpos : endpos,
-			curpos < zero_endpos ? NULL        : data,
+			curpos < zero_endpos ? NULL        : (void*)data, // I PROMISE this cast is okay
 			true
 		);
 	}

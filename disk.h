@@ -1,3 +1,5 @@
+#pragma once
+
 typedef struct fakedisk {
     unsigned int nblocks;
     unsigned int blocksize;

@@ -1,3 +1,5 @@
+#pragma once
+
 #include "block.h"
 
 #define INODE_META \
@@ -21,12 +23,14 @@ typedef struct inode_info {
 ino_t inode_allocate(disk_t *disk);
 int inode_free(disk_t *disk, ino_t inumber);
 
-int inode_set_info(disk_t *disk, ino_t inumber, mode_t mode, uid_t owner, gid_t group);
-int inode_get_info(disk_t *disk, ino_t inumber, inode_info_t *info);
+int inode_getinfo(disk_t *disk, ino_t inumber, inode_info_t *info);
 
-ssize_t inode_write(disk_t *disk, ino_t inumber, off_t pos, void *data, ssize_t size);
+ssize_t inode_write(disk_t *disk, ino_t inumber, off_t pos, const void *data, ssize_t size);
 ssize_t inode_read(disk_t *disk, ino_t inumber, off_t pos, void *data, ssize_t size);
 off_t inode_truncate(disk_t *disk, ino_t inumber, off_t size);
 
 nlink_t inode_link(disk_t *disk, ino_t inumber);
 nlink_t inode_unlink(disk_t *disk, ino_t inumber);
+
+int inode_chmod(disk_t *disk, ino_t inumber, mode_t mode);
+int inode_chown(disk_t *disk, ino_t inumber, uid_t user, gid_t group);

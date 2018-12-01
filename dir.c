@@ -33,14 +33,13 @@ _Static_assert(ENTRIES_PER_DIR_BLOCK >= 2, "not enough dir entries per dir block
 _Static_assert(NAMESPACE_PER_DIR_BLOCK > 255, "not enough name space per block");
 
 // allocate a new directory, return its inumber
-ino_t dir_create(disk_t *disk, ino_t parent, uid_t owner, gid_t group) {
+ino_t dir_create(disk_t *disk, ino_t parent) {
 	ino_t directory = inode_allocate(disk);
 	if (directory < 0) {
 		return -1;
 	}
 
-	// TODO: umask
-	assert(inode_set_info(disk, directory, S_IFDIR | 0755, owner, group) >= 0);
+	assert(inode_chmod(disk, directory, S_IFDIR | 0777) >= 0);
 
 	dir_map_block_t block;
 	block.numbers[0] = parent;
@@ -61,11 +60,11 @@ ino_t dir_create(disk_t *disk, ino_t parent, uid_t owner, gid_t group) {
 	return directory;
 }
 
-// free the directory, failing if it contains anything
-int dir_free(disk_t *disk, ino_t directory) {
+// check that the directory is empty
+int dir_isempty(disk_t *disk, ino_t directory) {
 	inode_info_t info;
 	dir_map_block_t block;
-	if (inode_get_info(disk, directory, &info) < 0) {
+	if (inode_getinfo(disk, directory, &info) < 0) {
 		return -1;
 	}
 	if (!S_ISDIR(info.mode)) {
@@ -73,24 +72,24 @@ int dir_free(disk_t *disk, ino_t directory) {
 	}
 	// this requires that our compaction works correctly, which it should, but how to test?
 	if (info.size > (off_t)sizeof(block)) {
-		return -1;
+		return 0;
 	}
 
 	assert(inode_read(disk, directory, 0, &block, sizeof(block)) == sizeof(block));
 
 	// see above
 	if (block.numbers[2] != INO_EOF) {
-		return -1;
+		return 0;
 	}
 
-	return 0;
+	return 1;
 }
 
 // change the parent inode entry
 int dir_reparent(disk_t *disk, ino_t directory, ino_t new_parent) {
 	inode_info_t info;
 	dir_map_block_t block;
-	if (inode_get_info(disk, directory, &info) < 0) {
+	if (inode_getinfo(disk, directory, &info) < 0) {
 		return -1;
 	}
 	if (!S_ISDIR(info.mode)) {
@@ -108,7 +107,7 @@ int dir_reparent(disk_t *disk, ino_t directory, ino_t new_parent) {
 ino_t dir_lookup(disk_t *disk, ino_t directory, const char *name, size_t namesize) {
 	inode_info_t info;
 	dir_map_block_t block;
-	if (inode_get_info(disk, directory, &info) < 0) {
+	if (inode_getinfo(disk, directory, &info) < 0) {
 		return -1;
 	}
 	if (!S_ISDIR(info.mode)) {
@@ -145,7 +144,7 @@ int dir_insert(disk_t *disk, ino_t directory, const char *name, size_t namesize,
 	size_t bestnameoff = 0;
 	unsigned int besti = 0;
 
-	if (inode_get_info(disk, directory, &info) < 0) {
+	if (inode_getinfo(disk, directory, &info) < 0) {
 		return -1;
 	}
 
@@ -204,7 +203,7 @@ ino_t dir_remove(disk_t *disk, ino_t directory, const char *name, size_t namesiz
 	off_t pos = 0;
 	int empty_count = 0;
 
-	if (inode_get_info(disk, directory, &info) < 0) {
+	if (inode_getinfo(disk, directory, &info) < 0) {
 		return -1;
 	}
 
@@ -267,7 +266,7 @@ off_t dir_enumerate(disk_t *disk, ino_t directory, off_t offset, ino_t *ino_out,
 	off_t pos = (offset / ENTRIES_PER_DIR_BLOCK) * sizeof(block);
 	size_t idx = offset % ENTRIES_PER_DIR_BLOCK;
 
-	if (inode_get_info(disk, directory, &info) < 0) {
+	if (inode_getinfo(disk, directory, &info) < 0) {
 		return -1;
 	}
 

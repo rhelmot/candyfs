@@ -1,4 +1,4 @@
-COMMON_OBJECTS = disk.o block.o inode.o dir.o refs.o tree.o
+COMMON_OBJECTS = disk.o block.o inode.o file.o dir.o symlink.o refs.o perm.o tree.o
 
 CFLAGS=`pkg-config fuse --cflags` -g -O0
 LDFLAGS=`pkg-config fuse --libs`

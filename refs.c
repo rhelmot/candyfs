@@ -1,4 +1,5 @@
 #include "refs.h"
+#include "dir.h"
 
 #include <stddef.h>
 #include <stdlib.h>
@@ -39,7 +40,7 @@ int refs_open(disk_t *disk, ino_t inode) {
 	(*target)->refcount++;
     } else {
 	inode_info_t info;
-	if (inode_get_info(disk, inode, &info) < 0) {
+	if (inode_getinfo(disk, inode, &info) < 0) {
 	    return -1;
 	}
 
@@ -92,4 +93,16 @@ nlink_t refs_unlink(disk_t *disk, ino_t inode) {
     }
     node->nlinks = inode_unlink(disk, inode);
     return node->nlinks;
+}
+
+ino_t refs_dir_lookup_open(disk_t *disk, ino_t directory, const char *name, size_t namesize) {
+    ino_t out = dir_lookup(disk, directory, name, namesize);
+    if (out < 0) {
+	return out;
+    }
+
+    if (refs_open(disk, out) < 0) {
+	return -1;
+    }
+    return out;
 }

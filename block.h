@@ -1,3 +1,5 @@
+#pragma once
+
 #include <assert.h>
 #include <limits.h>
 #include <sys/fcntl.h>

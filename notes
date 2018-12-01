@@ -3,5 +3,5 @@ for thread safety:
 - need to lock each individual inumber on the level of the exported functions in inode.c
 - need to lock the data and inumber freelists in block.c
 - need to lock dir write operations
-- need namei and friends to pass around open-file handles to stuff so they don't get deleted out from under the reference
 - need to lock all operations on the open file table
+- need to make refs_dir_lookup_open atomic
