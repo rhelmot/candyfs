@@ -60,10 +60,6 @@ ino_t namei_rec(disk_t *disk, const char* path, ino_t *curdir, ino_t rootdir, bo
     inode_info_t info;
     const char *token = path;
     ino_t current = *curdir;
-    if (current == INO_EOF) {
-	current = *curdir = rootdir;
-	assert(refs_open(disk, *curdir) == 0);
-    }
     if (refs_open(disk, current) != 0) {
 	return -1;
     }
@@ -126,14 +122,40 @@ ino_t namei_rec(disk_t *disk, const char* path, ino_t *curdir, ino_t rootdir, bo
 // see path_resolution(7)
 //
 // path: the path to translate, null-terminated
-// curdir: a pointer to the current directory's inode. you should have ownership over this value. It will be released and replaced with an owned copy of the inode which is the last directory in the chain before the final lookup. Useful for mkdir and create and such. This outparam is only valid if the return value is >= 0 OR it's INO_EOF. INO_EOF indicates that the traversal succeeded until the final lookup, i.e. suitable for create or mkdir. If you pass INO_EOF in this field it will cause this to always start from the root.
-// rootdir: the inode for the root directory. Should have ownership.
+// curdir: a pointer to the current directory's inode. you should have ownership over this value. It will be released and replaced with an owned copy of the inode which is the last directory in the chain before the final lookup. Useful for mkdir and create and such. This outparam is only valid if the return value is >= 0 OR it's INO_EOF. INO_EOF indicates that the traversal succeeded until the final lookup, i.e. suitable for create or mkdir. If you pass INO_EOF in this field it will cause this to always start from the root. If you pass a null pointer, it will have the same effect.
+// rootdir: the inode for the root directory. Should have ownership. Or, can be INO_EOF in which the root will be 0 and you don't need to handle ownership.
 // deref: whether to allow returning inodes for symlinks or return the inode for the dereferenced target.
 // user: the current uid for permissions checking
 // group: the current gid for permissions checking
 //
 ino_t namei(disk_t *disk, const char* path, ino_t *curdir, ino_t rootdir, bool deref, uid_t user, gid_t group) {
-    return namei_rec(disk, path, curdir, rootdir, deref, user, group, 0);
+    bool usemyroot = rootdir == INO_EOF;
+    bool usemycurdir = curdir == NULL;
+    ino_t mycurdir = INO_EOF;
+
+    if (usemyroot) {
+	rootdir = 0;
+	assert(refs_open(disk, rootdir) == 0);
+    }
+    if (usemycurdir) {
+	curdir = &mycurdir;
+    }
+
+    if (*curdir == INO_EOF) {
+	*curdir = rootdir;
+	assert(refs_open(disk, *curdir) == 0);
+    }
+
+    ino_t result = namei_rec(disk, path, curdir, rootdir, deref, user, group, 0);
+
+    if (usemyroot) {
+	assert(refs_close(disk, rootdir) == 0);
+    }
+    if (usemycurdir) {
+	assert(refs_close(disk, *curdir) == 0);
+    }
+
+    return result;
 }
 
 int mkfs_tree(disk_t *disk) {
