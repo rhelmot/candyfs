@@ -424,8 +424,7 @@ static int candy_utimens(const char *path, const struct timespec tv[2]) {
     ino_t inode = path_resolve(disk, path, false, GETUSER(), GETGROUP());
     F(inode, true);
 
-    // TODO this is not quite the correct permission check
-    int ores = perm_check(disk, inode, PERM_WRITE, GETUSER(), GETGROUP());
+    int ores = perm_check(disk, inode, PERM_UTIME, GETUSER(), GETGROUP());
     F(ores, I(inode));
 
     ores = inode_utime(disk, inode, &tv[0], &tv[1]);

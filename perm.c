@@ -13,6 +13,13 @@ int perm_check(disk_t *disk, ino_t inode, int perms, uid_t user, gid_t group) {
         return 0;
     }
 
+    if (perms == PERM_UTIME) {
+        if (user == info.owner) {
+            return 0;
+        }
+        perms = PERM_WRITE;
+    }
+
     if (user == info.owner) {
         return (perms & (info.mode >> 6) & 7) == perms ? 0 : -EACCES;
     }
