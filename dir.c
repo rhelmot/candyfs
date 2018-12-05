@@ -6,15 +6,15 @@
 /* WAYYYY too complicated for now. tone it the fuck down, buster.
    typedef struct dir_map_block {
    struct {
-      unsigned int hash : 24;
-      unsigned int length : 8;
-      unsigned int offset : 32;
-      ino_t inumber : 64;
+   unsigned int hash : 24;
+   unsigned int length : 8;
+   unsigned int offset : 32;
+   ino_t inumber : 64;
    } map[BLOCKSIZE / 16 - 1];
    unsigned int next_offset;
    unsigned int pad[3];
-} dir_map_block_t;
-*/
+   } dir_map_block_t;
+   */
 
 #define ENTRIES_PER_DIR_BLOCK (BLOCKSIZE / 4 / sizeof(ino_t))
 #define NAMESPACE_PER_DIR_BLOCK (BLOCKSIZE / 4 * 3)

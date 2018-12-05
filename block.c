@@ -3,39 +3,39 @@
 #include <string.h>
 
 /*SUPERBLOCK fields
-*size of filesystem
-*
-*number of freeblocks int he file system
-*list of free blocks available
-*index of next free block in the list of free blocks
-*
-*size of inode list
-*
-*number of free inodes in the FS
-*a list of free inodes in the FS
-*index of the next free inode in the list of free inodes
-*
-*lock fields for the 
-*flag to indicate the SUPERBLOCK has been modified
-*/
-#define SUPERBLOCK_HEAD \
-    int magic;                  \
-    unsigned long ilist_size;             \
-    blockno_t freelist_start;   \
-    ino_t ino_freelist_start;   \
-    unsigned long free_blocks;       \
-    unsigned long free_inodes;
+ *size of filesystem
+ *
+ *number of freeblocks int he file system
+ *list of free blocks available
+ *index of next free block in the list of free blocks
+ *
+ *size of inode list
+ *
+ *number of free inodes in the FS
+ *a list of free inodes in the FS
+ *index of the next free inode in the list of free inodes
+ *
+ *lock fields for the 
+ *flag to indicate the SUPERBLOCK has been modified
+ */
+#define SUPERBLOCK_HEAD         \
+	int magic;                  \
+	unsigned long ilist_size;   \
+	blockno_t freelist_start;   \
+	ino_t ino_freelist_start;   \
+	unsigned long free_blocks;  \
+	unsigned long free_inodes;
 
 
 typedef struct superblock {
-    SUPERBLOCK_HEAD
-    char _pad[BLOCKSIZE - sizeof(struct { SUPERBLOCK_HEAD })];
+	SUPERBLOCK_HEAD
+	char _pad[BLOCKSIZE - sizeof(struct { SUPERBLOCK_HEAD })];
 } superblock_t;
 
 #define BLOCKNUMS_PER_FREELIST_BLOCK ((int)(BLOCKSIZE / sizeof(blockno_t) - 1))
 typedef struct freelist_block {
-    blockno_t next;
-    blockno_t blocks[BLOCKNUMS_PER_FREELIST_BLOCK];
+	blockno_t next;
+	blockno_t blocks[BLOCKNUMS_PER_FREELIST_BLOCK];
 } freelist_block_t;
 
 #define INUMS_PER_ILIST_BLOCK ((int)(BLOCKSIZE / sizeof(blockno_t)))
@@ -47,153 +47,153 @@ _Static_assert(sizeof(ilist_block_t) == BLOCKSIZE, "ilist block is not blocksize
 _Static_assert(sizeof(data_block_t) == BLOCKSIZE, "data block is not blocksize");
 
 blockno_t ino_get(disk_t *disk, ino_t inumber) {
-    ilist_block_t myblock;
-    disk_read(disk, 1 + inumber / INUMS_PER_ILIST_BLOCK, myblock);
-    return myblock[inumber % INUMS_PER_ILIST_BLOCK];
+	ilist_block_t myblock;
+	disk_read(disk, 1 + inumber / INUMS_PER_ILIST_BLOCK, myblock);
+	return myblock[inumber % INUMS_PER_ILIST_BLOCK];
 }
 
 void ino_set(disk_t *disk, ino_t inumber, blockno_t blocknumber) {
-    ilist_block_t myblock;
-    disk_read(disk, 1 + inumber / INUMS_PER_ILIST_BLOCK, myblock);
-    myblock[inumber % INUMS_PER_ILIST_BLOCK] = blocknumber;
-    disk_write(disk, 1 + inumber / INUMS_PER_ILIST_BLOCK, myblock);
+	ilist_block_t myblock;
+	disk_read(disk, 1 + inumber / INUMS_PER_ILIST_BLOCK, myblock);
+	myblock[inumber % INUMS_PER_ILIST_BLOCK] = blocknumber;
+	disk_write(disk, 1 + inumber / INUMS_PER_ILIST_BLOCK, myblock);
 }
 
 ino_t ino_allocate(disk_t *disk) {
-    superblock_t superblock;
-    disk_read(disk, 0, &superblock);
-    ino_t result = superblock.ino_freelist_start;
-    if (result != INO_EOF) {
-        superblock.ino_freelist_start = -ino_get(disk, result);
-        superblock.free_inodes--;
-        disk_write(disk, 0, &superblock);
-    }
-    return result;
+	superblock_t superblock;
+	disk_read(disk, 0, &superblock);
+	ino_t result = superblock.ino_freelist_start;
+	if (result != INO_EOF) {
+		superblock.ino_freelist_start = -ino_get(disk, result);
+		superblock.free_inodes--;
+		disk_write(disk, 0, &superblock);
+	}
+	return result;
 }
 
 void ino_free(disk_t *disk, ino_t inumber) {
-    superblock_t superblock;
-    disk_read(disk, 0, &superblock);
-    ino_set(disk, inumber, -superblock.ino_freelist_start);
-    superblock.ino_freelist_start = inumber;
-    superblock.free_inodes++;
-    disk_write(disk, 0, &superblock);
+	superblock_t superblock;
+	disk_read(disk, 0, &superblock);
+	ino_set(disk, inumber, -superblock.ino_freelist_start);
+	superblock.ino_freelist_start = inumber;
+	superblock.free_inodes++;
+	disk_write(disk, 0, &superblock);
 }
 
 blockno_t block_allocate(disk_t *disk) {
-    superblock_t superblock;
-    disk_read(disk, 0, &superblock);
-    if (superblock.freelist_start == BLOCKNO_EOF) {
-        return BLOCKNO_EOF;
-    }
+	superblock_t superblock;
+	disk_read(disk, 0, &superblock);
+	if (superblock.freelist_start == BLOCKNO_EOF) {
+		return BLOCKNO_EOF;
+	}
 
-    freelist_block_t freelist_block;
-    disk_read(disk, superblock.freelist_start, &freelist_block);
-    for (int i = 0; i < BLOCKNUMS_PER_FREELIST_BLOCK; i++) {
-        blockno_t candidate = freelist_block.blocks[i];
-        if (candidate != BLOCKNO_EOF) {
-            freelist_block.blocks[i] = BLOCKNO_EOF;
-            superblock.free_blocks--;
-            disk_write(disk, 0, &superblock);
-            disk_write(disk, superblock.freelist_start, &freelist_block);
-            return candidate;
-        }
-    }
+	freelist_block_t freelist_block;
+	disk_read(disk, superblock.freelist_start, &freelist_block);
+	for (int i = 0; i < BLOCKNUMS_PER_FREELIST_BLOCK; i++) {
+		blockno_t candidate = freelist_block.blocks[i];
+		if (candidate != BLOCKNO_EOF) {
+			freelist_block.blocks[i] = BLOCKNO_EOF;
+			superblock.free_blocks--;
+			disk_write(disk, 0, &superblock);
+			disk_write(disk, superblock.freelist_start, &freelist_block);
+			return candidate;
+		}
+	}
 
-    blockno_t vagabond = superblock.freelist_start;
-    superblock.freelist_start = freelist_block.next;
-    superblock.free_blocks--;
-    disk_write(disk, 0, &superblock);
-    return vagabond;
+	blockno_t vagabond = superblock.freelist_start;
+	superblock.freelist_start = freelist_block.next;
+	superblock.free_blocks--;
+	disk_write(disk, 0, &superblock);
+	return vagabond;
 }
 
 void block_free(disk_t *disk, blockno_t blockno) {
-    superblock_t superblock;
-    disk_read(disk, 0, &superblock);
+	superblock_t superblock;
+	disk_read(disk, 0, &superblock);
 
-    if (superblock.freelist_start != BLOCKNO_EOF) {
-        freelist_block_t freelist_head;
-        disk_read(disk, superblock.freelist_start, &freelist_head);
-        for (int i = BLOCKNUMS_PER_FREELIST_BLOCK - 1; i >= 0; i--) {
-            if (freelist_head.blocks[i] == BLOCKNO_EOF) {
-                freelist_head.blocks[i] = blockno;
-                superblock.free_blocks++;
-                disk_write(disk, 0, &superblock);
-                disk_write(disk, superblock.freelist_start, &freelist_head);
-                return;
-            }
-        }
-    }
+	if (superblock.freelist_start != BLOCKNO_EOF) {
+		freelist_block_t freelist_head;
+		disk_read(disk, superblock.freelist_start, &freelist_head);
+		for (int i = BLOCKNUMS_PER_FREELIST_BLOCK - 1; i >= 0; i--) {
+			if (freelist_head.blocks[i] == BLOCKNO_EOF) {
+				freelist_head.blocks[i] = blockno;
+				superblock.free_blocks++;
+				disk_write(disk, 0, &superblock);
+				disk_write(disk, superblock.freelist_start, &freelist_head);
+				return;
+			}
+		}
+	}
 
-    freelist_block_t vagabond_block;
-    vagabond_block.next = superblock.freelist_start;
-    for (int i = 0; i < BLOCKNUMS_PER_FREELIST_BLOCK; i++) {
-        vagabond_block.blocks[i] = BLOCKNO_EOF;
-    }
-    superblock.freelist_start = blockno;
-    superblock.free_blocks++;
-    disk_write(disk, 0, &superblock);
-    disk_write(disk, blockno, &vagabond_block);
+	freelist_block_t vagabond_block;
+	vagabond_block.next = superblock.freelist_start;
+	for (int i = 0; i < BLOCKNUMS_PER_FREELIST_BLOCK; i++) {
+		vagabond_block.blocks[i] = BLOCKNO_EOF;
+	}
+	superblock.freelist_start = blockno;
+	superblock.free_blocks++;
+	disk_write(disk, 0, &superblock);
+	disk_write(disk, blockno, &vagabond_block);
 }
 
 // ilist size is number of ilist blocks
 void mkfs_storage(disk_t *disk, unsigned long ilist_size) {
-    unsigned long num_data_blocks = disk->nblocks - ilist_size - 1;
-    blockno_t first_data_block = ilist_size + 1;
-    assert(num_data_blocks > 0);
+	unsigned long num_data_blocks = disk->nblocks - ilist_size - 1;
+	blockno_t first_data_block = ilist_size + 1;
+	assert(num_data_blocks > 0);
 
-    superblock_t superblock;
-    memset(&superblock, 0, sizeof(superblock));
+	superblock_t superblock;
+	memset(&superblock, 0, sizeof(superblock));
 
-    superblock.magic = CANDYFS_MAGIC;
-    superblock.ilist_size = ilist_size;
-    superblock.freelist_start = first_data_block;
-    superblock.ino_freelist_start = 0;
-    superblock.free_blocks = disk->nblocks - first_data_block;
-    superblock.free_inodes = ilist_size * INUMS_PER_ILIST_BLOCK;
-    disk_write(disk, 0, &superblock);
+	superblock.magic = CANDYFS_MAGIC;
+	superblock.ilist_size = ilist_size;
+	superblock.freelist_start = first_data_block;
+	superblock.ino_freelist_start = 0;
+	superblock.free_blocks = disk->nblocks - first_data_block;
+	superblock.free_inodes = ilist_size * INUMS_PER_ILIST_BLOCK;
+	disk_write(disk, 0, &superblock);
 
-    for (unsigned long i = 0; i < ilist_size; i++) {
-        ilist_block_t iblock;
-        for (int j = 0; j < INUMS_PER_ILIST_BLOCK; j++) {
-            iblock[j] = -(j + INUMS_PER_ILIST_BLOCK*i + 1);
-        }
-        if (i == ilist_size - 1) {
-            iblock[INUMS_PER_ILIST_BLOCK - 1] = BLOCKNO_EOF;
-        }
-        disk_write(disk, i + 1, iblock);
-    }
+	for (unsigned long i = 0; i < ilist_size; i++) {
+		ilist_block_t iblock;
+		for (int j = 0; j < INUMS_PER_ILIST_BLOCK; j++) {
+			iblock[j] = -(j + INUMS_PER_ILIST_BLOCK*i + 1);
+		}
+		if (i == ilist_size - 1) {
+			iblock[INUMS_PER_ILIST_BLOCK - 1] = BLOCKNO_EOF;
+		}
+		disk_write(disk, i + 1, iblock);
+	}
 
-    for (blockno_t i = first_data_block; i < (blockno_t)disk->nblocks; i += BLOCKNUMS_PER_FREELIST_BLOCK + 1) {
-        freelist_block_t freelist_entry;
-        freelist_entry.next = i + BLOCKNUMS_PER_FREELIST_BLOCK + 1;
-        if (freelist_entry.next >= (blockno_t)disk->nblocks) {
-            freelist_entry.next = BLOCKNO_EOF;
-        }
-        for (int j = 0; j < BLOCKNUMS_PER_FREELIST_BLOCK; j++) {
-            blockno_t target_block = i + 1 + j;
-            if (target_block >= (blockno_t)disk->nblocks) {
-                target_block = BLOCKNO_EOF;
-            }
-            freelist_entry.blocks[j] = target_block;
-        }
+	for (blockno_t i = first_data_block; i < (blockno_t)disk->nblocks; i += BLOCKNUMS_PER_FREELIST_BLOCK + 1) {
+		freelist_block_t freelist_entry;
+		freelist_entry.next = i + BLOCKNUMS_PER_FREELIST_BLOCK + 1;
+		if (freelist_entry.next >= (blockno_t)disk->nblocks) {
+			freelist_entry.next = BLOCKNO_EOF;
+		}
+		for (int j = 0; j < BLOCKNUMS_PER_FREELIST_BLOCK; j++) {
+			blockno_t target_block = i + 1 + j;
+			if (target_block >= (blockno_t)disk->nblocks) {
+				target_block = BLOCKNO_EOF;
+			}
+			freelist_entry.blocks[j] = target_block;
+		}
 
-        disk_write(disk, i, &freelist_entry);
-    }
+		disk_write(disk, i, &freelist_entry);
+	}
 }
 
 void block_stat(disk_t *disk, struct statvfs *fs) {
-    superblock_t superblock;
-    disk_read(disk, 0, &superblock);
+	superblock_t superblock;
+	disk_read(disk, 0, &superblock);
 
-    fs->f_bsize = disk->blocksize;
-    fs->f_frsize = disk->blocksize;
+	fs->f_bsize = disk->blocksize;
+	fs->f_frsize = disk->blocksize;
 
-    fs->f_blocks = disk->nblocks;
-    fs->f_bfree = superblock.free_blocks;
-    fs->f_bavail = superblock.free_blocks;
+	fs->f_blocks = disk->nblocks;
+	fs->f_bfree = superblock.free_blocks;
+	fs->f_bavail = superblock.free_blocks;
 
-    fs->f_files = superblock.ilist_size * INUMS_PER_ILIST_BLOCK;
-    fs->f_ffree = superblock.free_inodes;
-    fs->f_favail = superblock.free_inodes;
+	fs->f_files = superblock.ilist_size * INUMS_PER_ILIST_BLOCK;
+	fs->f_ffree = superblock.free_inodes;
+	fs->f_favail = superblock.free_inodes;
 }
