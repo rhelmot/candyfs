@@ -1,7 +1,40 @@
-for thread safety:
+need to add all the right errno values
 
+need to make the final header file
+
+need to write tests
+
+for thread safety:
 - need to lock each individual inumber on the level of the exported functions in inode.c
 - need to lock the data and inumber freelists in block.c
 - need to lock dir write operations
 - need to lock all operations on the open file table
+- need to lock all operations on the open path table
 - need to make refs_dir_lookup_open atomic
+- perhaps change path ownership/locking model to similar to inodes? if all meaningful operations requiring atomicity are actually provided by path module, holding a path ref no longer needs to be holding a lock, and the operations can just lock everything themselves. once we have a path reference, we can actually compare paths in a normalized way so we can order the locks on rename and avoid the deadlock problem.
+
+intuition behind ownership system is that it prevents TOCTOTOU bugs
+- there's lots of weird things I don't want to think about if an inode were deallocated and reallocated while there were a reference to it but this is certainly a safe set - while you hold ownership you can be sure you're always referring to the same file
+- it's useful to have an atomic operation getting ownership as you do a lookup, since the directory structure constitutes a kind of "check" being performed on the data. without the atomic operation you could end up operating on a file which was never intended to be visible from some part of the tree.
+
+MODULARITY GOAL: make it so that any messing up that could cause issues can be detected statically
+
+cute tricks:
+- file ownership
+- path ownership
+ - paths evolved a bit
+ - initially path ownership was a lock, so atomic operations on paths could be done with a minimalist expressive set
+ - but the problem is that the well-formedness of the directory tree can be compromised like this
+- directory crippling
+
+static verifcations:
+TOP LEVEL:
+- path_open -> P()
+- path_resolve -> I()
+- refs_open -> I()
+- symlink_create/file_create -> refs_open
+
+PATH LEVEL:
+- path_get -> refs_close
+- refs_open -> refs_close
+- refs_dir_lookup_open -> refs_close

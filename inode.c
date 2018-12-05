@@ -12,7 +12,7 @@ void now(struct timespec *ts) {
 }
 
 // these are block counts, not byte counts
-#define SINGLE_INDIRECT_COUNT ((int)(BLOCKSIZE / sizeof(blockno_t)))
+#define SINGLE_INDIRECT_COUNT ((long)(BLOCKSIZE / sizeof(blockno_t)))
 #define DOUBLE_INDIRECT_COUNT (SINGLE_INDIRECT_COUNT * SINGLE_INDIRECT_COUNT)
 #define TRIPLE_INDIRECT_COUNT (SINGLE_INDIRECT_COUNT * SINGLE_INDIRECT_COUNT * SINGLE_INDIRECT_COUNT)
 
@@ -23,7 +23,7 @@ void now(struct timespec *ts) {
 	unsigned int magic;
 
 // number of pointer slots available in the block without the fixed length part
-#define NUM_BLOCK_SLOTS ((int)((BLOCKSIZE - sizeof(struct { INODE_HEAD })) / sizeof(blockno_t)) )
+#define NUM_BLOCK_SLOTS ((long)((BLOCKSIZE - sizeof(struct { INODE_HEAD })) / sizeof(blockno_t)) )
 
 // configuration paramters for indirect counts
 #define NUM_SINGLE_INDIRECT_SLOTS 1
@@ -142,7 +142,7 @@ bool inode_indirect_grow(disk_t *disk, blockno_t *dest, long curblock, int indir
 	indirect_block_t indirect_data;
 	if (blockno == BLOCKNO_EOF) {
 		blockno = block_allocate(disk);
-		if (blockno < 0) {
+		if ((long)blockno < 0) {
 			*allocated = 0;
 			return false;
 		}
@@ -386,7 +386,7 @@ ssize_t inode_indirect_readwrite(disk_t *disk, blockno_t blockno, long curblock,
 // set the size of an inode
 off_t inode_setsize(disk_t *disk, ino_t inumber, off_t size) {
 	blockno_t block = ino_get(disk, inumber);
-	if (block < 0) {
+	if ((long)block < 0) {
 		return -1;
 	}
 	inode_t inode;
@@ -504,11 +504,11 @@ ino_t inode_allocate(disk_t *disk) {
 
 	// allocate resources. if anything fails, clean up and abort
 	ino_t inumber = ino_allocate(disk);
-	if (inumber < 0) {
+	if ((long)inumber < 0) {
 		return -1;
 	}
 	blockno_t block = block_allocate(disk);
-	if (block < 0) {
+	if ((long)block < 0) {
 		ino_free(disk, inumber);
 		return -1;
 	}
@@ -522,7 +522,7 @@ ino_t inode_allocate(disk_t *disk) {
 // EXPORTED: free an inode. will fail if there are any links to it.
 int inode_free(disk_t *disk, ino_t inumber) {
 	blockno_t block = ino_get(disk, inumber);
-	if (block < 0) {
+	if ((long)block < 0) {
 		return -1;
 	}
 	inode_t inode;
@@ -545,7 +545,7 @@ int inode_free(disk_t *disk, ino_t inumber) {
 // EXPORTED: set the mode field atomicly
 int inode_chmod(disk_t *disk, ino_t inumber, mode_t mode) {
 	blockno_t block = ino_get(disk, inumber);
-	if (block < 0) {
+	if ((long)block < 0) {
 		return -1;
 	}
 	inode_t inode;
@@ -563,7 +563,7 @@ int inode_chmod(disk_t *disk, ino_t inumber, mode_t mode) {
 // EXPORTED: set the uid/gid fields atomicly
 int inode_chown(disk_t *disk, ino_t inumber, uid_t owner, gid_t group) {
 	blockno_t block = ino_get(disk, inumber);
-	if (block < 0) {
+	if ((long)block < 0) {
 		return -1;
 	}
 	inode_t inode;
@@ -586,7 +586,7 @@ int inode_chown(disk_t *disk, ino_t inumber, uid_t owner, gid_t group) {
 // EXPORTED: get the inode metadata
 int inode_getinfo(disk_t *disk, ino_t inumber, inode_info_t *info) {
 	blockno_t block = ino_get(disk, inumber);
-	if (block < 0) {
+	if ((long)block < 0) {
 		return -1;
 	}
 	inode_t inode;
@@ -599,10 +599,38 @@ int inode_getinfo(disk_t *disk, ino_t inumber, inode_info_t *info) {
 	return 0;
 }
 
+// EXPORTED: set the atime/mtime fields
+int inode_utime(disk_t *disk, ino_t inumber, const struct timespec *last_access, const struct timespec *last_change) {
+	blockno_t block = ino_get(disk, inumber);
+	if ((long)block < 0) {
+		return -1;
+	}
+	inode_t inode;
+	disk_read(disk, block, &inode);
+	if (inode.magic != INODE_MAGIC) {
+		return -1;
+	}
+
+	now(&inode.last_statchange);
+	if (last_access == NULL || last_access->tv_nsec == UTIME_NOW) {
+		inode.last_access = inode.last_statchange;
+	} else if (last_access->tv_nsec != UTIME_OMIT) {
+		inode.last_access = *last_access;
+	}
+	if (last_change == NULL || last_change->tv_nsec == UTIME_NOW) {
+		inode.last_change = inode.last_statchange;
+	} else if (last_change->tv_nsec != UTIME_OMIT) {
+		inode.last_change = *last_change;
+	}
+
+	disk_write(disk, block, &inode);
+	return 0;
+}
+
 // EXPORTED: atomically increment the link count
 nlink_t inode_link(disk_t *disk, ino_t inumber) {
 	blockno_t block = ino_get(disk, inumber);
-	if (block < 0) {
+	if ((long)block < 0) {
 		return -1;
 	}
 	inode_t inode;
@@ -620,7 +648,7 @@ nlink_t inode_link(disk_t *disk, ino_t inumber) {
 // EXPORTED: atomically decrement the link count. does not handle freeing at 0 links
 nlink_t inode_unlink(disk_t *disk, ino_t inumber) {
 	blockno_t block = ino_get(disk, inumber);
-	if (block < 0) {
+	if ((long)block < 0) {
 		return -1;
 	}
 	inode_t inode;
@@ -636,15 +664,20 @@ nlink_t inode_unlink(disk_t *disk, ino_t inumber) {
 }
 
 // EXPORTED: write to a file
+// if pos is -1 this is an atomic append
 ssize_t inode_write(disk_t *disk, ino_t inumber, off_t pos, const void *data, ssize_t size) {
 	blockno_t block = ino_get(disk, inumber);
-	if (block < 0) {
+	if ((long)block < 0) {
 		return -1;
 	}
 	inode_t inode;
 	disk_read(disk, block, &inode);
 	if (inode.magic != INODE_MAGIC) {
 		return -1;
+	}
+
+	if (pos == -1) {
+		pos = inode.size;
 	}
 
 	off_t endpos = pos + size;
@@ -660,11 +693,13 @@ ssize_t inode_write(disk_t *disk, ino_t inumber, off_t pos, const void *data, ss
 
 		// complicated: the inode will be mutated by this opreration
 		// (notably the block slots) so we have to reload it!
-		if (inode_setsize(disk, inumber, endpos) < 0) {
+		if ((long)inode_setsize(disk, inumber, endpos) < 0) {
 			return -1;
 		}
 		disk_read(disk, block, &inode);
-		if (endpos < inode.size) {
+
+		assert(endpos >= inode.size);
+		if (endpos > inode.size) {
 			// RAN OUT OF ROOM WAHP WAHP
 			// we should still complete as much of the write as possible
 			endpos = inode.size;
@@ -719,7 +754,7 @@ ssize_t inode_write(disk_t *disk, ino_t inumber, off_t pos, const void *data, ss
 // EXPORTED: read from a file
 ssize_t inode_read(disk_t *disk, ino_t inumber, off_t pos, void *data, ssize_t size) {
 	blockno_t block = ino_get(disk, inumber);
-	if (block < 0) {
+	if ((long)block < 0) {
 		return -1;
 	}
 	inode_t inode;
@@ -777,7 +812,7 @@ ssize_t inode_read(disk_t *disk, ino_t inumber, off_t pos, void *data, ssize_t s
 // EXPORTED: pretty much just the ftruncate syscall. like inode_setsize but does zero-padding
 off_t inode_truncate(disk_t *disk, ino_t inumber, off_t size) {
 	blockno_t block = ino_get(disk, inumber);
-	if (block < 0) {
+	if ((long)block < 0) {
 		return -1;
 	}
 	inode_t inode;

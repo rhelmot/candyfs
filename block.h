@@ -5,10 +5,11 @@
 #include <sys/fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/statvfs.h>
 
 #include "disk.h"
 
-#define BLOCKSIZE 512
+#define BLOCKSIZE 4096
 #define CANDYFS_MAGIC 0xCA4D11F5
 
 #define INO_EOF ((ino_t)LONG_MIN)
@@ -24,4 +25,6 @@ void ino_free(disk_t *disk, ino_t inumber);
 
 blockno_t block_allocate(disk_t *disk);
 void block_free(disk_t *disk, blockno_t blockno);
-void mkfs_storage(disk_t *disk, int ilist_size);
+
+void mkfs_storage(disk_t *disk, unsigned long ilist_size);
+void block_stat(disk_t *disk, struct statvfs *fs);

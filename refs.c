@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdlib.h>
+#include <errno.h>
 
 typedef struct open_file_node {
     struct open_file_node *next;
@@ -50,7 +51,7 @@ int refs_open(disk_t *disk, ino_t inode) {
 	}
 
 	open_file_node_t *newnode = (open_file_node_t*)malloc(sizeof(open_file_node_t));
-	newnode->next = (*target)->next;
+	newnode->next = *target;
 	newnode->inode = inode;
 	newnode->refcount = 1;
 	newnode->nlinks = info.nlinks;
@@ -64,7 +65,7 @@ int refs_close(disk_t *disk, ino_t inode) {
     open_file_node_t **target = find_node_loc(inode);
 
     if (!*target || (*target)->inode != inode) {
-	return -1;
+	return -1; // user error
     }
 
     if (--(*target)->refcount <= 0) { // <= for safety, just in case we miss a code path for free
@@ -76,8 +77,8 @@ int refs_close(disk_t *disk, ino_t inode) {
 
 	if (nlinks == 0) { // == is okay - we only set nlinks in absolute terms
 	    // GOOD BYE
-	    if (inode_free(disk, inode) <= 0) {
-		return -1;
+	    if (inode_free(disk, inode) < 0) {
+		return -EIO;
 	    }
 	}
     }
@@ -86,34 +87,35 @@ int refs_close(disk_t *disk, ino_t inode) {
 }
 
 // safely increase the number of links on an inode
-nlink_t refs_link(disk_t *disk, ino_t inode) {
+int refs_link(disk_t *disk, ino_t inode) {
     open_file_node_t *node = find_node(inode);
     if (!node) {
-	return -1;
+	return -1; // user error
     }
     node->nlinks = inode_link(disk, inode);
-    return node->nlinks;
+    return 0;
 }
 
 // safely decrease the muber of links on an inode
-nlink_t refs_unlink(disk_t *disk, ino_t inode) {
+int refs_unlink(disk_t *disk, ino_t inode) {
     open_file_node_t *node = find_node(inode);
     if (!node) {
-	return -1;
+	return -1; // user error
     }
     node->nlinks = inode_unlink(disk, inode);
-    return node->nlinks;
+    return 0;
 }
 
 // atomic version of dir_lookup + refs_open (only prevents races if there are no other calls to dir_lookup)
 ino_t refs_dir_lookup_open(disk_t *disk, ino_t directory, const char *name, size_t namesize) {
     ino_t out = dir_lookup(disk, directory, name, namesize);
-    if (out < 0) {
+    if ((long)out < 0) {
 	return out;
     }
 
-    if (refs_open(disk, out) < 0) {
-	return -1;
+    int ores = refs_open(disk, out);
+    if (ores < 0) {
+	return ores;
     }
     return out;
 }

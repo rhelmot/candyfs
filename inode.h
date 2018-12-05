@@ -34,3 +34,5 @@ nlink_t inode_unlink(disk_t *disk, ino_t inumber);
 
 int inode_chmod(disk_t *disk, ino_t inumber, mode_t mode);
 int inode_chown(disk_t *disk, ino_t inumber, uid_t user, gid_t group);
+
+int inode_utime(disk_t *disk, ino_t inumber, const struct timespec *last_access, const struct timespec *last_change);

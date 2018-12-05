@@ -1,6 +1,7 @@
 #include "dir.h"
 
 #include <string.h>
+#include <errno.h>
 
 /* WAYYYY too complicated for now. tone it the fuck down, buster.
    typedef struct dir_map_block {
@@ -35,11 +36,11 @@ _Static_assert(NAMESPACE_PER_DIR_BLOCK > 255, "not enough name space per block")
 // allocate a new directory, return its inumber
 ino_t dir_create(disk_t *disk, ino_t parent) {
 	ino_t directory = inode_allocate(disk);
-	if (directory < 0) {
-		return -1;
+	if ((long)directory < 0) {
+		return -ENOSPC;
 	}
 
-	assert(inode_chmod(disk, directory, S_IFDIR | 0777) >= 0);
+	assert(inode_chmod(disk, directory, S_IFDIR | 0777) == 0);
 
 	dir_map_block_t block;
 	block.numbers[0] = parent;
@@ -53,36 +54,42 @@ ino_t dir_create(disk_t *disk, ino_t parent) {
 	memset(&block.names[5], 0, NAMESPACE_PER_DIR_BLOCK - 5);
 
 	if (inode_write(disk, directory, 0, &block, sizeof(block)) != sizeof(block)) {
-		assert(inode_free(disk, directory) >= 0);
-		return -1;
+		assert(inode_free(disk, directory) == 0);
+		return -ENOSPC;
 	}
 
 	return directory;
 }
 
-// check that the directory is empty
-int dir_isempty(disk_t *disk, ino_t directory) {
+// check that the directory is empty and then mark it destroyed
+int dir_destroy(disk_t *disk, ino_t directory) {
 	inode_info_t info;
 	dir_map_block_t block;
 	if (inode_getinfo(disk, directory, &info) < 0) {
-		return -1;
+		return -ENOENT;
 	}
 	if (!S_ISDIR(info.mode)) {
-		return -1;
+		return -ENOTDIR;
 	}
+	if (info.size < (off_t)sizeof(block)) {
+		return -ENOENT;
+	}
+
 	// this requires that our compaction works correctly, which it should, but how to test?
 	if (info.size > (off_t)sizeof(block)) {
-		return 0;
+		return -ENOTEMPTY;
 	}
 
 	assert(inode_read(disk, directory, 0, &block, sizeof(block)) == sizeof(block));
 
 	// see above
 	if (block.numbers[2] != INO_EOF) {
-		return 0;
+		return -ENOTEMPTY;
 	}
 
-	return 1;
+	// this is the signal for "deleted", setting the size to a non-blocksize-multiple
+	assert(inode_truncate(disk, directory, sizeof(block) - 1) == sizeof(block) - 1);
+	return 0;
 }
 
 // change the parent inode entry
@@ -90,10 +97,13 @@ int dir_reparent(disk_t *disk, ino_t directory, ino_t new_parent) {
 	inode_info_t info;
 	dir_map_block_t block;
 	if (inode_getinfo(disk, directory, &info) < 0) {
-		return -1;
+		return -ENOENT;
 	}
 	if (!S_ISDIR(info.mode)) {
-		return -1;
+		return -ENOTDIR;
+	}
+	if (info.size < (off_t)sizeof(block)) {
+		return -ENOENT;
 	}
 
 	assert(inode_read(disk, directory, 0, &block, sizeof(block)) == sizeof(block));
@@ -108,18 +118,18 @@ ino_t dir_lookup(disk_t *disk, ino_t directory, const char *name, size_t namesiz
 	inode_info_t info;
 	dir_map_block_t block;
 	if (inode_getinfo(disk, directory, &info) < 0) {
-		return -1;
+		return -ENOENT;
 	}
 	if (!S_ISDIR(info.mode)) {
-		return -1;
+		return -ENOTDIR;
 	}
 
 	off_t pos = 0;
-	if (namesize > 255) {
-		return -1;
+	if (namesize > NAME_MAX) {
+		return -ENAMETOOLONG;
 	}
 
-	while (inode_read(disk, directory, pos, &block, sizeof(block)) == sizeof(block)) {
+	while (inode_read(disk, directory, pos, &block, sizeof(block)) > 0) {
 		int nameoff = 0;
 		for (unsigned int i = 0; i < ENTRIES_PER_DIR_BLOCK && block.numbers[i] != INO_EOF; i++) {
 			size_t curlen = strlen(&block.names[nameoff]);
@@ -131,7 +141,7 @@ ino_t dir_lookup(disk_t *disk, ino_t directory, const char *name, size_t namesiz
 		pos += sizeof(block);
 	}
 
-	return -1;
+	return -ENOENT;
 }
 
 // add a directory entry
@@ -145,15 +155,17 @@ int dir_insert(disk_t *disk, ino_t directory, const char *name, size_t namesize,
 	unsigned int besti = 0;
 
 	if (inode_getinfo(disk, directory, &info) < 0) {
-		return -1;
+		return -ENOENT;
 	}
-
 	if (!S_ISDIR(info.mode)) {
-		return -1;
+		return -ENOTDIR;
+	}
+	if (info.size < (off_t)sizeof(block)) {
+		return -ENOENT;
 	}
 
-	if (namesize > 255) {
-		return -1;
+	if (namesize > NAME_MAX) {
+		return -ENAMETOOLONG;
 	}
 
 	while (inode_read(disk, directory, pos, &block, sizeof(block)) == sizeof(block)) {
@@ -162,7 +174,7 @@ int dir_insert(disk_t *disk, ino_t directory, const char *name, size_t namesize,
 		for (i = 0; i < ENTRIES_PER_DIR_BLOCK && block.numbers[i] != INO_EOF; i++) {
 			size_t curlen = strlen(&block.names[nameoff]);
 			if (curlen == namesize && memcmp(&block.names[nameoff], name, namesize) == 0) {
-				return -1;
+				return -EEXIST;
 			}
 			nameoff += curlen + 1;
 		}
@@ -190,7 +202,7 @@ int dir_insert(disk_t *disk, ino_t directory, const char *name, size_t namesize,
 	bestblock.numbers[besti] = target;
 
 	if (inode_write(disk, directory, bestpos, &bestblock, sizeof(bestblock)) != sizeof(bestblock)) {
-		return -1;
+		return -ENOSPC;
 	}
 
 	return 0;
@@ -204,22 +216,24 @@ ino_t dir_remove(disk_t *disk, ino_t directory, const char *name, size_t namesiz
 	int empty_count = 0;
 
 	if (inode_getinfo(disk, directory, &info) < 0) {
-		return -1;
+		return -ENOENT;
 	}
-
 	if (!S_ISDIR(info.mode)) {
-		return -1;
+		return -ENOTDIR;
+	}
+	if (info.size < (off_t)sizeof(block)) {
+		return -ENOENT;
 	}
 
-	if (namesize > 255) {
-		return -1;
+	if (namesize > NAME_MAX) {
+		return -ENAMETOOLONG;
 	}
 	// disallow removing the self/parent entries
 	if (namesize == 1 && name[0] == '.') {
-		return -1;
+		return -EINVAL;
 	}
 	if (namesize == 2 && name[0] == '.' && name[1] == '.') {
-		return -1;
+		return -ENOTEMPTY;
 	}
 
 	while (inode_read(disk, directory, pos, &block, sizeof(block)) == sizeof(block)) {
@@ -228,6 +242,7 @@ ino_t dir_remove(disk_t *disk, ino_t directory, const char *name, size_t namesiz
 			size_t curlen = strlen(&block.names[nameoff]);
 			if (curlen == namesize && memcmp(&block.names[nameoff], name, namesize) == 0) {
 				ino_t res = block.numbers[i];
+
 				// found the thing we want to remove. two options:
 				// 1) there's nothing else in this block, and it's the last block:
 				//    do not write it back, instead truncate the file. perhaps multiple blocks.
@@ -254,7 +269,7 @@ ino_t dir_remove(disk_t *disk, ino_t directory, const char *name, size_t namesiz
 		empty_count++;
 	}
 
-	return -1;
+	return -ENOENT;
 }
 
 // enumerate the contents of a directory. stores the inumber and name of the next entry
@@ -267,20 +282,16 @@ off_t dir_enumerate(disk_t *disk, ino_t directory, off_t offset, ino_t *ino_out,
 	size_t idx = offset % ENTRIES_PER_DIR_BLOCK;
 
 	if (inode_getinfo(disk, directory, &info) < 0) {
-		return -1;
+		return -ENOENT;
 	}
 
 	if (!S_ISDIR(info.mode)) {
-		return -1;
-	}
-
-	if (namesize > 255) {
-		return -1;
+		return -ENOTDIR;
 	}
 
 	// increment our search until we find a block containing an entry not yet covered
 	while (1) {
-		if (inode_read(disk, directory, pos, &block, sizeof(block)) != sizeof(block)) {
+		if (inode_read(disk, directory, pos, &block, sizeof(block)) == 0) {
 			return 0;
 		}
 
