@@ -2,6 +2,8 @@
 
 #include "block.h"
 
+#include <time.h>
+
 #define INODE_META \
 	mode_t mode;                        \
 	uid_t owner;                        \

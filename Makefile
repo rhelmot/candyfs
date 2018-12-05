@@ -1,6 +1,6 @@
 COMMON_OBJECTS = disk.o block.o inode.o file.o dir.o symlink.o refs.o perm.o path.o
 
-CFLAGS=`pkg-config fuse --cflags` -g -O0 -Wall -Wpedantic
+CFLAGS=`pkg-config fuse --cflags` -g -O0 -Wall -std=gnu11
 LDFLAGS=`pkg-config fuse --libs`
 
 all: mount.candyfs mkfs.candyfs
