@@ -1,9 +1,3 @@
-need to add all the right errno values
-
-need to make the final header file
-
-need to write tests
-
 for thread safety:
 - need to lock each individual inumber on the level of the exported functions in inode.c
 - need to lock the data and inumber freelists in block.c
@@ -38,3 +32,12 @@ PATH LEVEL:
 - path_get -> refs_close
 - refs_open -> refs_close
 - refs_dir_lookup_open -> refs_close
+
+LAYERS:
+- disk
+- block (eliminates superblock)
+- inode (eliminates blocks)
+- file dir symlink (eliminates type half of mode)
+- refs (eliminates links) perm (eliminates perm half of mode + uid/gid)
+- path (provides consistency)
+- candyfs
