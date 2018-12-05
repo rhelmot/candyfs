@@ -473,21 +473,43 @@ static struct fuse_operations operations = {
 };
 
 void usage() {
-    puts("Usage: ./candyfs [device] [mountpoint]");
+    puts("Usage: mount.candyfs [device] mountpoint");
     exit(1);
 }
 
 int main(int argc, char *argv[]) {
-    if (argc != 3) {
+    // desired options: -s -ohard_remove -ofsname=/dev/whatever -oblkdev -ouse_ino -oallow_other [mountpoint]
+
+    if (argc == 2) {
+        disk_t *disk = disk_create(1024*1024, BLOCKSIZE);
+        mkfs_storage(disk, 1024);
+        assert(mkfs_path(disk, getuid(), getgid()) == 0);
+
+        char *args[] = {
+            argv[0], "-d", "-s", "-ohard_remove", "-ouse_ino", "-oallow_other", argv[1], NULL
+        };
+        return fuse_main(7, args, &operations, disk);
+    } else if (argc == 3) {
+        disk_t *disk = disk_open(argv[1], BLOCKSIZE);
+        if (!disk) {
+            puts("Could not open device");
+            exit(1);
+        }
+
+        char superblock[BLOCKSIZE];
+        disk_read(disk, 0, superblock);
+        if (*(unsigned int*)&superblock[0] != CANDYFS_MAGIC) {
+            puts("Device is not candyfs formatted");
+            exit(1);
+        }
+
+        char fsname[1024];
+        snprintf(fsname, 1024, "-ofsname=%s", argv[1]);
+        char *args[] = {
+            argv[0], "-s", "-ohard_remove", fsname, "-oblkdev", "-ouse_ino", "-oallow_other", argv[2], NULL
+        };
+        return fuse_main(8, args, &operations, disk);
+    } else {
         usage();
     }
-    disk_t *disk = disk_create(1024*1024, BLOCKSIZE);
-    mkfs_storage(disk, 1024);
-    mkfs_path(disk, getuid(), getgid());
-
-    char *args[] = {
-        argv[0], "-d", "-s", "-ohard_remove", "-ouse_ino", "-oallow_other", argv[2], NULL
-    };
-    // desired options: -s -ohard_remove -ofsname=/dev/whatever -oblkdev -ouse_ino -oallow_other [mountpoint]
-    return fuse_main(7, args, &operations, disk);
 }
