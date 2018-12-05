@@ -10,6 +10,8 @@ It will produce two files.
   It can take a `--user` argument indicating to make the root directory owned by the current user.
 - `mount.candyfs`: the mount program - taking a disk and a mountpoint and putting them together.
   If you specify only a mountpoint, a filesystem of 4G will be created in RAM and formatted before mouting.
+  In mount-a-disk mode, the program will run in the background.
+  In mount-ram mode, the program will run in the program and print fuse's debug messages.
 
 ### Codebase
 
