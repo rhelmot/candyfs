@@ -1,9 +1,3 @@
-🍬 Filesystem in RAM 🍬
+🍬 CandyFS 🍬
 
-In order to compile install
-
-git
-make
-pkg-config
-gcc
-libfuse-dev
+By Audrey Dutcher and absolutely nobody else
